@@ -119,6 +119,7 @@ T* alignup(T* p)
 #define MAX_PATH            1024
 #endif
 
+
 inline void MilliSleep(int64_t n)
 {
 #if BOOST_VERSION >= 105000
@@ -127,6 +128,16 @@ inline void MilliSleep(int64_t n)
     boost::this_thread::sleep(boost::posix_time::milliseconds(n));
 #endif
 }
+
+inline void MicroSleep(int64_t n)
+{
+#if BOOST_VERSION >= 105000
+    boost::this_thread::sleep_for(boost::chrono::microseconds(n));
+#else
+    boost::this_thread::sleep(boost::posix_time::microseconds(n));
+#endif
+}
+
 
 /* This GNU C extension enables the compiler to check the format string against the parameters provided.
  * X is the number of the "format string" parameter, and Y is the number of the first variadic parameter.
@@ -155,6 +166,7 @@ extern bool fTestNet;
 extern bool fNoListen;
 extern bool fLogTimestamps;
 extern bool fReopenDebugLog;
+extern bool fSyncForceDueStuck;
 
 void RandAddSeed();
 void RandAddSeedPerfmon();
@@ -339,6 +351,12 @@ inline int64_t GetTimeMillis()
 {
     return (boost::posix_time::ptime(boost::posix_time::microsec_clock::universal_time()) -
             boost::posix_time::ptime(boost::gregorian::date(1970,1,1))).total_milliseconds();
+}
+
+inline int64_t GetTimeMicros()
+{
+    return (boost::posix_time::microsec_clock::universal_time() -
+                   boost::posix_time::ptime(boost::gregorian::date(1970,1,1))).total_microseconds();
 }
 
 inline std::string DateTimeStrFormat(const char* pszFormat, int64_t nTime)
@@ -614,6 +632,12 @@ public:
 };
 
 bool NewThread(void(*pfn)(void*), void* parg);
+
+int GetComputerRAM();
+
+int GetDefaultCacheSize();
+
+char* GetBoostVersion();
 
 #ifdef WIN32
 inline void SetThreadPriority(int nPriority)

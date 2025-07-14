@@ -338,6 +338,13 @@ const CRPCCommand *CRPCTable::operator[](string name) const
     return (*it).second;
 }
 
+std::vector<std::string> CRPCTable::listCommands() const
+{
+    std::vector<std::string> commandList;
+    for (const auto& i : mapCommands) commandList.emplace_back(i.first);
+    return commandList;
+}
+
 //
 // HTTP protocol
 //
@@ -627,10 +634,6 @@ bool ClientAllowed(const boost::asio::ip::address& address)
     BOOST_FOREACH(string strAllow, vAllow)
         if (CompareIPAddresses(strAddress, strAllow))
             return true;
-
-    //BOOST_FOREACH(string strAllow, vAllow)
-    //    if (WildcardMatch(strAddress, strAllow))
-    //        return true;
     return false;
 }
 

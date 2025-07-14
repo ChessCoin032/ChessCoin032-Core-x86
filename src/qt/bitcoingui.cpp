@@ -79,9 +79,11 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     trayIcon(0),
     notificator(0),
     rpcConsole(0),
+    aboutDialog(0),
+    optionsDialog(0),
     nWeight(0)
 {
-    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    //QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 
     resize(850, 550);
@@ -202,6 +204,9 @@ BitcoinGUI::BitcoinGUI(QWidget *parent):
     rpcConsole = new RPCConsole(this);
     connect(openRPCConsoleAction, SIGNAL(triggered()), rpcConsole, SLOT(show()));
 
+    aboutDialog = new AboutDialog(0);
+    optionsDialog = new OptionsDialog(0);
+
     // Clicking on "Verify Message" in the address book sends you to the verify message tab
     connect(addressBookPage, SIGNAL(verifyMessage(QString)), this, SLOT(gotoVerifyMessageTab(QString)));
     // Clicking on "Sign Message" in the receive coins page sends you to the sign message tab
@@ -217,6 +222,11 @@ BitcoinGUI::~BitcoinGUI()
 #ifdef Q_OS_MAC
     delete appMenuBar;
 #endif
+
+    delete rpcConsole;
+    delete aboutDialog;
+    delete optionsDialog;
+    delete signVerifyMessageDialog;
 }
 
 void BitcoinGUI::createActions()
@@ -268,34 +278,51 @@ void BitcoinGUI::createActions()
     quitAction->setToolTip(tr("Quit application"));
     quitAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
     quitAction->setMenuRole(QAction::QuitRole);
+    quitAction->setIconVisibleInMenu(true);
     aboutAction = new QAction(QIcon(":/icons/bitcoin"), tr("&About ChessCoin 0.32%"), this);
     aboutAction->setToolTip(tr("Show information about ChessCoin 0.32%"));
     aboutAction->setMenuRole(QAction::AboutRole);
+    aboutAction->setIconVisibleInMenu(true);
+#if QT_VERSION < 0x050000
     aboutQtAction = new QAction(QIcon(":/trolltech/qmessagebox/images/qtlogo-64.png"), tr("About &Qt"), this);
+#else
+    aboutQtAction = new QAction(QIcon(":/qt-project.org/qmessagebox/images/qtlogo-64.png"), tr("About &Qt"), this);
+#endif
     aboutQtAction->setToolTip(tr("Show information about Qt"));
     aboutQtAction->setMenuRole(QAction::AboutQtRole);
+    aboutQtAction->setIconVisibleInMenu(true);
     optionsAction = new QAction(QIcon(":/icons/options"), tr("&Options..."), this);
     optionsAction->setToolTip(tr("Modify configuration options for ChessCoin 0.32%"));
     optionsAction->setMenuRole(QAction::PreferencesRole);
+    optionsAction->setIconVisibleInMenu(true);
     toggleHideAction = new QAction(QIcon(":/icons/bitcoin"), tr("&Show / Hide"), this);
     encryptWalletAction = new QAction(QIcon(":/icons/lock_closed"), tr("&Encrypt Wallet..."), this);
     encryptWalletAction->setToolTip(tr("Encrypt or decrypt wallet"));
     encryptWalletAction->setCheckable(true);
+    encryptWalletAction->setIconVisibleInMenu(true);
     backupWalletAction = new QAction(QIcon(":/icons/filesave"), tr("&Backup Wallet..."), this);
     backupWalletAction->setToolTip(tr("Backup wallet to another location"));
+    backupWalletAction->setIconVisibleInMenu(true);
     changePassphraseAction = new QAction(QIcon(":/icons/key"), tr("&Change Passphrase..."), this);
     changePassphraseAction->setToolTip(tr("Change the passphrase used for wallet encryption"));
+    changePassphraseAction->setIconVisibleInMenu(true);
     unlockWalletAction = new QAction(QIcon(":/icons/lock_open"), tr("&Unlock Wallet..."), this);
     unlockWalletAction->setToolTip(tr("Unlock wallet"));
+    unlockWalletAction->setIconVisibleInMenu(true);
     lockWalletAction = new QAction(QIcon(":/icons/lock_closed"), tr("&Lock Wallet"), this);
     lockWalletAction->setToolTip(tr("Lock wallet"));
+    lockWalletAction->setIconVisibleInMenu(true);
     signMessageAction = new QAction(QIcon(":/icons/edit"), tr("Sign &message..."), this);
+    signMessageAction->setIconVisibleInMenu(true);
     verifyMessageAction = new QAction(QIcon(":/icons/transaction_0"), tr("&Verify message..."), this);
+    verifyMessageAction->setIconVisibleInMenu(true);
 
     exportAction = new QAction(QIcon(":/icons/export"), tr("&Export..."), this);
     exportAction->setToolTip(tr("Export the data in the current tab to a file"));
+    exportAction->setIconVisibleInMenu(true);
     openRPCConsoleAction = new QAction(QIcon(":/icons/debugwindow"), tr("&Debug window"), this);
     openRPCConsoleAction->setToolTip(tr("Open debugging and diagnostic console"));
+    openRPCConsoleAction->setIconVisibleInMenu(true);
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
@@ -483,16 +510,23 @@ void BitcoinGUI::optionsClicked()
 {
     if(!clientModel || !clientModel->getOptionsModel())
         return;
-    OptionsDialog dlg;
-    dlg.setModel(clientModel->getOptionsModel());
-    dlg.exec();
+    //OptionsDialog dlg;
+    //dlg.setModel(clientModel->getOptionsModel());
+    //dlg.exec();
+
+    optionsDialog->setModel(clientModel->getOptionsModel());
+    optionsDialog->setWindowModality(Qt::ApplicationModal);
+    optionsDialog->show();
 }
 
 void BitcoinGUI::aboutClicked()
 {
-    AboutDialog dlg;
-    dlg.setModel(clientModel);
-    dlg.exec();
+    //AboutDialog dlg;
+    //dlg.setModel(clientModel);
+    //dlg.exec();
+    aboutDialog->setModel(clientModel);
+    aboutDialog->setWindowModality(Qt::ApplicationModal);
+    aboutDialog->show();
 }
 
 void BitcoinGUI::setNumConnections(int count)
@@ -517,7 +551,6 @@ void BitcoinGUI::setNumBlocks(int count, int nTotalBlocks)
     {
         progressBarLabel->setVisible(false);
         progressBar->setVisible(false);
-
         return;
     }
 

@@ -14,6 +14,7 @@
 #include "strlcpy.h"
 #include <boost/algorithm/string/case_conv.hpp> // for to_lower()
 
+
 using namespace std;
 
 // Settings
@@ -515,6 +516,7 @@ bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest
     addr = CService("0.0.0.0:0");
     if (!nameproxy.second)
         return false;
+
     if (!ConnectSocketDirectly(nameproxy.first, hSocket, nTimeout))
         return false;
 

@@ -55,6 +55,8 @@ enum
     LOCAL_MAX
 };
 
+bool IsPeerAddrLocalGood(CNode *pnode);
+void AdvertiseLocal(CNode *pnode);
 void SetLimited(enum Network net, bool fLimited = true);
 bool IsLimited(enum Network net);
 bool IsLimited(const CNetAddr& addr);
@@ -144,6 +146,7 @@ public:
     bool fInbound;
     int nStartingHeight;
     int nMisbehavior;
+    bool fSyncNode;
 };
 
 
@@ -237,6 +240,7 @@ public:
     CBlockIndex* pindexLastGetBlocksBegin;
     uint256 hashLastGetBlocksEnd;
     int nStartingHeight;
+    bool fStartSync;
 
     // flood relay
     std::vector<CAddress> vAddrToSend;
@@ -244,6 +248,9 @@ public:
     bool fGetAddr;
     std::set<uint256> setKnown;
     uint256 hashCheckpointKnown; // ppcoin: known sent sync-checkpoint
+    int64_t nNextAddrSend;
+    int64_t nNextLocalAddrSend;
+    int64_t nNextInvSend;
 
     // inventory based relay
     mruset<CInv> setInventoryKnown;
@@ -277,6 +284,10 @@ public:
         pindexLastGetBlocksBegin = 0;
         hashLastGetBlocksEnd = 0;
         nStartingHeight = -1;
+        nNextLocalAddrSend = 0;
+        nNextAddrSend = 0;
+        nNextInvSend = 0;
+        fStartSync = false;
         fGetAddr = false;
         nMisbehavior = 0;
         hashCheckpointKnown = 0;
@@ -299,6 +310,13 @@ public:
 private:
     CNode(const CNode&);
     void operator=(const CNode&);
+
+    // Network usage totals
+    static CCriticalSection cs_totalBytesRecv;
+    static CCriticalSection cs_totalBytesSent;
+    static uint64_t nTotalBytesRecv;
+    static uint64_t nTotalBytesSent;
+
 public:
 
 
@@ -684,6 +702,13 @@ public:
     static bool IsBanned(CNetAddr ip);
     bool Misbehaving(int howmuch); // 1 == a little, 100 == a lot
     void copyStats(CNodeStats &stats);
+
+    // Network stats
+    static void RecordBytesRecv(uint64_t bytes);
+    static void RecordBytesSent(uint64_t bytes);
+
+    static uint64_t GetTotalBytesRecv();
+    static uint64_t GetTotalBytesSent();
 };
 
 inline void RelayInventory(const CInv& inv)
@@ -700,5 +725,8 @@ class CTransaction;
 void RelayTransaction(const CTransaction& tx, const uint256& hash);
 void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataStream& ss);
 
+
+/** Return a timestamp in the future (in microseconds) for exponentially distributed events. */
+int64_t PoissonNextSend(int64_t nNow, int average_interval_seconds);
 
 #endif

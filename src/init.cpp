@@ -3,6 +3,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <stdlib.h>
 #include "txdb.h"
 #include "walletdb.h"
 #include "bitcoinrpc.h"
@@ -19,7 +20,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <openssl/crypto.h>
 
-#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -85,6 +85,7 @@ void Shutdown(void* parg)
     if (fFirstThread)
     {
         fShutdown = true;
+        fRequestShutdown = true;
         nTransactionsUpdated++;
 //        CTxDB().Close();
         bitdb.Flush(false);
@@ -220,7 +221,7 @@ bool AppInit(int argc, char* argv[])
 extern void noui_connect();
 int main(int argc, char* argv[])
 {
-    printf("[*] Daemon Starting ...\n");
+    printf("***** Daemon Starting *****\n");
 
     bool fRet = false;
 
@@ -504,9 +505,6 @@ bool AppInit2()
 
     fPrintToConsole = GetBoolArg("-printtoconsole");
     fPrintToDebugger = GetBoolArg("-printtodebugger");
-    //fPrintToConsole = true;
-    //fPrintToDebugger = true;
-
     fLogTimestamps = GetBoolArg("-logtimestamps");
 
     if (mapArgs.count("-timeout"))
@@ -555,7 +553,7 @@ bool AppInit2()
 
     if (GetBoolArg("-shrinkdebugfile", !fDebug))
         ShrinkDebugFile();
-    printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+    printf("\n\n*********** Program Log Starting ***********\n\n");
     printf("ChessCoin 0.32% version %s (%s)\n", FormatFullVersion().c_str(), CLIENT_DATE.c_str());
     printf("Using OpenSSL version %s\n", SSLeay_version(SSLEAY_VERSION));
     if (!fLogTimestamps)
@@ -641,8 +639,10 @@ else
         if (!IsLimited(NET_IPV4))
             SetProxy(NET_IPV4, addrProxy, nSocksVersion);
         if (nSocksVersion > 4) {
+#ifdef USE_IPV6
             if (!IsLimited(NET_IPV6))
                 SetProxy(NET_IPV6, addrProxy, nSocksVersion);
+#endif
             SetNameProxy(addrProxy, nSocksVersion);
         }
         fProxy = true;
@@ -683,8 +683,10 @@ else
         } else {
             struct in_addr inaddr_any;
             inaddr_any.s_addr = INADDR_ANY;
+#ifdef USE_IPV6
             if (!IsLimited(NET_IPV6))
                 fBound |= Bind(CService(in6addr_any, GetListenPort()), false);
+#endif
             if (!IsLimited(NET_IPV4))
                 fBound |= Bind(CService(inaddr_any, GetListenPort()), !fBound);
         }
@@ -740,7 +742,7 @@ else
         return false;
     }
 
-    uiInterface.InitMessage(_("Loading block index..."));
+
     printf("Loading block index...\n");
     bool fLoaded = false;
     while (!fLoaded) {
@@ -979,8 +981,33 @@ else
 #if !defined(QT_GUI)
     // Loop until process is exit()ed from shutdown() function,
     // called from ThreadRPCServer thread when a "stop" command is received.
+
+    int totalblocks = GetNumBlocksOfPeers();
+    int nPrevHeight = 0;
+    int64_t prevtime = GetTime();
+
     while (1)
-        MilliSleep(5000);
+    {
+        if (nBestHeight < totalblocks)
+        {
+            if (nBestHeight != nPrevHeight)
+            {
+                nPrevHeight = nBestHeight;
+                prevtime = GetTime();
+                fSyncForceDueStuck = false;
+            }
+            else
+            {
+                int64_t deltatime = GetTime() - prevtime;
+                if (deltatime >= 32)
+                    fSyncForceDueStuck = true;
+            }
+        }
+
+        MilliSleep(4000);
+
+        totalblocks = GetNumBlocksOfPeers();
+    }
 #endif
 
     return true;

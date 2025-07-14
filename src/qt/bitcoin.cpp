@@ -26,6 +26,7 @@
 #include <QFile>
 #include <QTextStream>
 
+
 #if (defined (LINUX) || defined (_linux_))
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -237,7 +238,6 @@ int main(int argc, char *argv[])
         app.setApplicationName("ChessCoin-Qt");
 
     QFile f(":qdarkstyle/dark/darkstyle.qss");
-
     if (f.exists()) {
         f.open(QFile::ReadOnly | QFile::Text);
         QTextStream ts(&f);

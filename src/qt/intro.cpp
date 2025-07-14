@@ -124,7 +124,6 @@ Intro::Intro(QWidget *parent) :
     setMinimumSize(480, 384);
     setMaximumSize(480, 384);
 #endif
-
     startThread();
 }
 

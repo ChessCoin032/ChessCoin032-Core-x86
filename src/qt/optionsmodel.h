@@ -29,7 +29,8 @@ public:
         DisplayUnit,       // BitcoinUnits::Unit
         DisplayAddresses,  // bool
         Language,          // QString
-        CoinControlFeatures, // bool
+        CoinControlFeatures,    // bool
+        DbCacheSize,            // int
         OptionIDRowCount,
         MapPortUPnP,
     };
@@ -51,11 +52,12 @@ public:
     QString getLanguage() { return language; }
 
 private:
-    int nDisplayUnit;
+    int  nDisplayUnit;
     bool bDisplayAddresses;
     bool fMinimizeToTray;
     bool fMinimizeOnClose;
     bool fCoinControlFeatures;
+    int  nDbCacheSize;
     QString language;
 
 signals:

@@ -2,6 +2,7 @@
 #define RPCCONSOLE_H
 
 #include <QDialog>
+#include <QCompleter>
 
 namespace Ui {
     class RPCConsole;
@@ -37,6 +38,8 @@ private slots:
     void on_openDebugLogfileButton_clicked();
     /** display messagebox with program parameters (same as bitcoin-qt --help) */
     void on_showCLOptionsButton_clicked();
+    /** change the time range of the network traffic graph */
+    void on_sldGraphRange_valueChanged(int value);
 
 public slots:
     void clear();
@@ -49,6 +52,11 @@ public slots:
     void browseHistory(int offset);
     /** Scroll console view to end */
     void scrollToEnd();
+
+    void updateElapsedTimer();
+
+    void updateTrafficStats(quint64 totalBytesIn, quint64 totalBytesOut);
+
 signals:
     // For RPC command executor
     void stopExecutor();
@@ -58,9 +66,16 @@ private:
     Ui::RPCConsole *ui;
     ClientModel *clientModel;
     QStringList history;
+    QString currentBlockText;
     int historyPtr;
+    int blockElapsedCount;
+    QCompleter *autoCompleter;
+
+    QTimer *elapsedTimer;
 
     void startExecutor();
+    void setTrafficGraphRange(int mins);
+    QString FormatBytes(quint64 bytes);
 };
 
 #endif // RPCCONSOLE_H

@@ -27,8 +27,8 @@ namespace Checkpoints
     //
     static MapCheckpoints mapCheckpoints =
         boost::assign::map_list_of
-        ( 0,       std::make_pair(hashGenesisBlock, 1465133106) )
-        ( 2040000, std::make_pair(uint256("0x8a9cbd23dbbb98c89bbac1f5c91ae24ec06dd9299506943913caed9a32b50393"), 1597328874) )
+        ( 0,        std::make_pair(hashGenesisBlock, 1465133106) )
+        ( 2040000,  std::make_pair(uint256("0x8a9cbd23dbbb98c89bbac1f5c91ae24ec06dd9299506943913caed9a32b50393"), 1597328874) )
     ;
 
     // TestNet has no checkpoints
@@ -36,6 +36,7 @@ namespace Checkpoints
         boost::assign::map_list_of
         ( 0,       std::make_pair(hashGenesisBlock, 1465133106) )
         ;
+
 
     bool CheckHardened(int nHeight, const uint256& hash)
     {
@@ -171,6 +172,7 @@ namespace Checkpoints
                 CBlock block;
                 if (!block.ReadFromDisk(pindexCheckpoint))
                     return error("AcceptPendingSyncCheckpoint: ReadFromDisk failed for sync checkpoint %s", hashPendingCheckpoint.ToString().c_str());
+
                 if (!block.SetBestChain(txdb, pindexCheckpoint))
                 {
                     hashInvalidCheckpoint = hashPendingCheckpoint;
@@ -259,6 +261,7 @@ namespace Checkpoints
             CBlock block;
             if (!block.ReadFromDisk(mapBlockIndex[hash]))
                 return error("ResetSyncCheckpoint: ReadFromDisk failed for hardened checkpoint %s", hash.ToString().c_str());
+
             if (!block.SetBestChain(txdb, mapBlockIndex[hash]))
             {
                 return error("ResetSyncCheckpoint: SetBestChain failed for hardened checkpoint %s", hash.ToString().c_str());
@@ -412,6 +415,7 @@ bool CSyncCheckpoint::ProcessSyncCheckpoint(CNode* pfrom)
         CBlock block;
         if (!block.ReadFromDisk(pindexCheckpoint))
             return error("ProcessSyncCheckpoint: ReadFromDisk failed for sync checkpoint %s", hashCheckpoint.ToString().c_str());
+
         if (!block.SetBestChain(txdb, pindexCheckpoint))
         {
             Checkpoints::hashInvalidCheckpoint = hashCheckpoint;

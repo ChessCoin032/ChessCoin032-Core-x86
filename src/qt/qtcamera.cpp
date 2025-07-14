@@ -164,7 +164,7 @@ void qtCamera::displayCaptureError(int id, const QCameraImageCapture::Error erro
 {
     Q_UNUSED(id);
     Q_UNUSED(error);
-    QMessageBox::warning(this, tr("Image Capture Error"), errorString);
+    //QMessageBox::warning(this, tr("Image Capture Error"), errorString);
     m_isCapturingImage = false;
 }
 

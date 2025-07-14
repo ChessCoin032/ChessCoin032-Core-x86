@@ -6,6 +6,7 @@
 
 #include "kernel.h"
 #include "txdb.h"
+#include "checkpoints.h"
 
 using namespace std;
 
@@ -84,9 +85,7 @@ static bool SelectBlockFromCandidates(vector<pair<int64_t, uint256> >& vSortedBy
             continue;
         // compute the selection hash by hashing its proof-hash and the
         // previous proof-of-stake modifier
-        //uint256 hashProof = pindex->IsProofOfStake()? pindex->hashProof : pindex->GetBlockHash();
         CDataStream ss(SER_GETHASH, 0);
-        //ss << hashProof << nStakeModifierPrev;
         ss << pindex->hashProof << nStakeModifierPrev;
         uint256 hashSelection = Hash(ss.begin(), ss.end());
         // the selection hash is divided by 2**32 so that proof-of-stake block
@@ -290,13 +289,14 @@ bool CheckStakeKernelHash(unsigned int nBits, const CBlock& blockFrom, unsigned 
     int nStakeModifierHeight = 0;
     int64_t nStakeModifierTime = 0;
 
+
     if (!GetKernelStakeModifier(hashBlockFrom, nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
         return false;
 
     ss << nStakeModifier;
-
     ss << nTimeBlockFrom << nTxPrevOffset << txPrev.nTime << prevout.n << nTimeTx;
     hashProofOfStake = Hash(ss.begin(), ss.end());
+
     if (fPrintProofOfStake)
     {
         printf("CheckStakeKernelHash() : using modifier 0x%016" PRIx64 " at height=%d timestamp=%s for block from height=%d timestamp=%s\n",
@@ -313,6 +313,7 @@ bool CheckStakeKernelHash(unsigned int nBits, const CBlock& blockFrom, unsigned 
     // Now check if proof-of-stake hash meets target protocol
     if (CBigNum(hashProofOfStake) > bnCoinDayWeight * bnTargetPerCoinDay)
         return false;
+        
     if (fDebug && !fPrintProofOfStake)
     {
         printf("CheckStakeKernelHash() : using modifier 0x%016" PRIx64 " at height=%d timestamp=%s for block from height=%d timestamp=%s\n",

@@ -14,15 +14,15 @@ STRIP=$(TARGET_PLATFORM)-w64-mingw32-strip
 INCLUDEPATHS= \
  -I"$(CURDIR)" \
  -I"$(CURDIR)"/obj \
- -I"$(DEPSDIR)/boost_1_55_0" \
- -I"$(DEPSDIR)/db-6.0.20/build_unix" \
- -I"$(DEPSDIR)/openssl-1.0.1f/include" \
+ -I"/usr/local/boost.1.77.0/include" \
+ -I"/usr/local/berkeleydb.6.0.20/include" \
+ -I"/usr/local/ssl.1.1.1/include" \
  -I"$(DEPSDIR)"
 
 LIBPATHS= \
- -L"$(DEPSDIR)/boost_1_55_0/stage/lib" \
- -L"$(DEPSDIR)/db-6.0.20/build_unix" \
- -L"$(DEPSDIR)/openssl-1.0.1f"
+ -L"/usr/local/boost.1.77.0/lib" \
+ -L"/usr/local/berkeleydb.6.0.20/lib" \
+ -L"/usr/local/ssl.1.1.1/lib"
 
 LIBS= \
  -l boost_system-mt \

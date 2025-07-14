@@ -82,12 +82,14 @@ void WalletModel::pollBalanceChanged()
     // Get required locks upfront. This avoids the GUI from getting stuck on
     // periodical polls if the core is holding the locks for a longer time -
     // for example, during a wallet rescan.
+#ifdef LOCKMODE    
     TRY_LOCK(cs_main, lockMain);
     if(!lockMain)
         return;
     TRY_LOCK(wallet->cs_wallet, lockWallet);
     if(!lockWallet)
         return;
+#endif        
 
     if(nBestHeight != cachedNumBlocks)
     {
@@ -420,7 +422,9 @@ bool WalletModel::getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const
 // returns a list of COutputs from COutPoints
 void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs)
 {
+#ifdef LOCKMODE	
     LOCK2(cs_main, wallet->cs_wallet);
+#endif    
     BOOST_FOREACH(const COutPoint& outpoint, vOutpoints)
     {
         if (!wallet->mapWallet.count(outpoint.hash)) continue;
@@ -437,7 +441,9 @@ void WalletModel::listCoins(std::map<QString, std::vector<COutput> >& mapCoins) 
     std::vector<COutput> vCoins;
     wallet->AvailableCoins(vCoins);
 
+#ifdef LOCKMODE
     LOCK2(cs_main, wallet->cs_wallet); // ListLockedCoins, mapWallet
+#endif    
     std::vector<COutPoint> vLockedCoins;
 
     // add locked coins

@@ -13,6 +13,27 @@ const std::string CLIENT_NAME("Satoshi");
 // Client version number
 #define CLIENT_VERSION_SUFFIX   ""
 
+// Compiler name
+#ifdef __INTEL_COMPILER
+//code specific to intel compiler
+#define CL_NAME   "-icpc"
+#elif _MSC_VER
+//code specific to MSVC compiler
+#define CL_NAME   "-msvc"
+#elif __clang__
+//code specific to clang compiler
+#define CL_NAME   "-clang"
+#elif __MINGW32__
+//code specific to mingw compiler
+#define CL_NAME   "-mingw"
+#elif __GNUC__
+//code specific to gnu compiler
+#define CL_NAME   "-gcc"
+#else
+#define CL_NAME   "-genericcl"
+//others
+#endif
+
 
 // The following part of the code determines the CLIENT_BUILD variable.
 // Several mechanisms are used for this:
@@ -29,9 +50,9 @@ const std::string CLIENT_NAME("Satoshi");
 // finally CLIENT_VERSION_SUFFIX is added
 
 // First, include build.h if requested
-#ifdef HAVE_BUILD_INFO
-#    include "build.h"
-#endif
+//#ifdef HAVE_BUILD_INFO
+//#    include "build.h"
+//#endif
 
 // git will put "#define GIT_ARCHIVE 1" on the next line inside archives.
 #ifdef GIT_ARCHIVE
@@ -50,20 +71,21 @@ const std::string CLIENT_NAME("Satoshi");
     DO_STRINGIZE(maj) "." DO_STRINGIZE(min) "." DO_STRINGIZE(rev) "-unk"
 
 #ifndef BUILD_DESC
-#    ifdef GIT_COMMIT_ID
-#        define BUILD_DESC BUILD_DESC_FROM_COMMIT(CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD)
-#    else
-#        define BUILD_DESC BUILD_DESC_FROM_UNKNOWN(CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION)
-#    endif
+#define BUILD_DESC BUILD_DESC_FROM_COMMIT(CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD)
+#endif
+
+#ifndef BUILD_AGENT
+#define BUILD_AGENT(maj,min,rev,buildnum) "/Satoshi:" DO_STRINGIZE(maj) "." DO_STRINGIZE(min) "." DO_STRINGIZE(rev) "." DO_STRINGIZE(buildnum) "/"
 #endif
 
 #ifndef BUILD_DATE
 #    ifdef GIT_COMMIT_DATE
 #        define BUILD_DATE GIT_COMMIT_DATE
 #    else
-#        define BUILD_DATE __DATE__ ", " __TIME__
+#        define BUILD_DATE __DATE__ " " __TIME__
 #    endif
 #endif
 
 const std::string CLIENT_BUILD(BUILD_DESC CLIENT_VERSION_SUFFIX);
 const std::string CLIENT_DATE(BUILD_DATE);
+const std::string CLIENT_AGENT(BUILD_AGENT(CLIENT_VERSION_MAJOR, CLIENT_VERSION_MINOR, CLIENT_VERSION_REVISION, CLIENT_VERSION_BUILD));

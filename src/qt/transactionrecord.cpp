@@ -155,7 +155,10 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *
 
 void TransactionRecord::updateStatus(const CWalletTx &wtx)
 {
+#ifdef LOCKMODE	
     AssertLockHeld(cs_main);
+#endif
+    
     // Determine transaction status
 
     // Find the block the tx is in
@@ -240,7 +243,10 @@ void TransactionRecord::updateStatus(const CWalletTx &wtx)
 
 bool TransactionRecord::statusUpdateNeeded()
 {
+#ifdef LOCKMODE	
     AssertLockHeld(cs_main);
+#endif
+    
     return status.cur_num_blocks != nBestHeight;
 }
 

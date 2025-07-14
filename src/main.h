@@ -95,8 +95,8 @@ extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern int64_t nTransactionFee;
 extern int64_t nReserveBalance;
 extern int64_t nMinimumInputValue;
-extern int nScriptCheckThreads;
-extern bool fUseFastIndex;
+extern int     nScriptCheckThreads;
+extern bool    fUseFastIndex;
 extern unsigned int nDerivationMethodIndex;
 
 extern bool fEnforceCanonical;
@@ -124,7 +124,7 @@ bool LoadBlockIndex(bool fAllowNew=true);
 void PrintBlockTree();
 CBlockIndex* FindBlockByHeight(int nHeight);
 bool ProcessMessages(CNode* pfrom);
-bool SendMessages(CNode* pto, bool fSendTrickle);
+bool SendMessages(CNode* pto);
 bool LoadExternalBlockFile(FILE* fileIn);
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits);

@@ -38,6 +38,7 @@ map<CNetAddr, LocalServiceInfo> mapLocalHost;
 static bool vfReachable[NET_MAX] = {};
 static bool vfLimited[NET_MAX] = {};
 static CNode* pnodeLocalHost = NULL;
+static CNode* pnodeSync = NULL;
 CAddress addrSeenByPeer(CService("0.0.0.0", 0), nLocalServices);
 uint64_t nLocalHostNonce = 0;
 boost::array<int, THREAD_MAX> vnThreadsRunning;
@@ -198,6 +199,44 @@ void SetReachable(enum Network net, bool fFlag)
         vfReachable[NET_IPV4] = true;
 }
 
+
+int GetnScore(const CService& addr)
+{
+    LOCK(cs_mapLocalHost);
+    if (mapLocalHost.count(addr) == LOCAL_NONE)
+        return 0;
+    return mapLocalHost[addr].nScore;
+}
+
+// Is our peer's addrLocal potentially useful as an external IP source?
+bool IsPeerAddrLocalGood(CNode *pnode)
+{
+    return fDiscover && pnode->addr.IsRoutable() && pnode->addrLocal.IsRoutable() &&
+           !IsLimited(pnode->addrLocal.GetNetwork());
+}
+
+// pushes our own address to a peer
+void AdvertiseLocal(CNode *pnode)
+{
+    if (!fNoListen && pnode->fSuccessfullyConnected)
+    {
+        CAddress addrLocal = GetLocalAddress(&pnode->addr);
+        // If discovery is enabled, sometimes give our peer the address it
+        // tells us that it sees us as in case it has a better idea of our
+        // address than we do.
+        if (IsPeerAddrLocalGood(pnode) && (!addrLocal.IsRoutable() ||
+             GetRand((GetnScore(addrLocal) > LOCAL_MANUAL) ? 8:2) == 0))
+        {
+            addrLocal.SetIP(pnode->addrLocal);
+        }
+        if (addrLocal.IsRoutable())
+        {
+            printf("AdvertiseLocal: advertising address %s\n", addrLocal.ToString().c_str());
+            pnode->PushAddress(addrLocal);
+        }
+    }
+}
+
 // learn a new local address
 bool AddLocal(const CService& addr, int nScore)
 {
@@ -293,6 +332,7 @@ bool IsReachable(enum Network net)
 bool GetMyExternalIP2(const CService& addrConnect, const char* pszGet, const char* pszKeyword, CNetAddr& ipRet)
 {
     SOCKET hSocket;
+
     if (!ConnectSocket(addrConnect, hSocket))
         return error("GetMyExternalIP() : connection to %s failed", addrConnect.ToString().c_str());
 
@@ -352,7 +392,8 @@ bool GetMyExternalIP(CNetAddr& ipRet)
         //  <?php echo $_SERVER["REMOTE_ADDR"]; ?>
         if (nHost == 1)
         {
-            addrConnect = CService("216.146.43.70",80); // checkip.dyndns.org
+            //addrConnect = CService("216.146.43.70",80); // checkip.dyndns.org
+            addrConnect = CService("193.122.6.168",80); // checkip.dyndns.org   <--- modified 2023/05/04
 
             if (nLookup == 1)
             {
@@ -419,10 +460,10 @@ void AddressCurrentlyConnected(const CService& addr)
 }
 
 
-
-
-
-
+uint64_t CNode::nTotalBytesRecv = 0;
+uint64_t CNode::nTotalBytesSent = 0;
+CCriticalSection CNode::cs_totalBytesRecv;
+CCriticalSection CNode::cs_totalBytesSent;
 
 CNode* FindNode(const CNetAddr& ip)
 {
@@ -527,6 +568,10 @@ void CNode::CloseSocketDisconnect()
         if (lockRecv)
             vRecvMsg.clear();
     }
+
+    // if this was the sync node, we'll need a new one
+    if (this == pnodeSync)
+        pnodeSync = NULL;
 }
 
 void CNode::PushVersion()
@@ -608,6 +653,7 @@ void CNode::copyStats(CNodeStats &stats)
     X(fInbound);
     X(nStartingHeight);
     X(nMisbehavior);
+    stats.fSyncNode = (this == pnodeSync);
 }
 #undef X
 
@@ -707,6 +753,7 @@ void SocketSendData(CNode *pnode)
         if (nBytes > 0) {
             pnode->nLastSend = GetTime();
             pnode->nSendOffset += nBytes;
+            pnode->RecordBytesSent(nBytes);
             if (pnode->nSendOffset == data.size()) {
                 pnode->nSendOffset = 0;
                 pnode->nSendSize -= data.size();
@@ -988,6 +1035,7 @@ void ThreadSocketHandler2(void* parg)
                             if (!pnode->ReceiveMsgBytes(pchBuf, nBytes))
                                 pnode->CloseSocketDisconnect();
                             pnode->nLastRecv = GetTime();
+                            pnode->RecordBytesRecv(nBytes);
                         }
                         else if (nBytes == 0)
                         {
@@ -1479,11 +1527,39 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
 }
 
 
+// for now, use a very simple selection metric: the node from which we received
+// most recently
+static int64_t NodeSyncScore(const CNode *pnode) {
+    return pnode->nLastRecv;
+}
 
 
+static void StartSync(const vector<CNode*> &vNodes) {
+    CNode *pnodeNewSync = NULL;
+    int64_t nBestScore = 0;
 
 
-
+    // Iterate over all nodes
+    for (CNode* pnode : vNodes) {
+        // check preconditions for allowing a sync
+        if (!pnode->fClient && !pnode->fOneShot &&
+            !pnode->fDisconnect && pnode->fSuccessfullyConnected &&
+            (pnode->nStartingHeight > (nBestHeight - 144)) &&
+            (pnode->nVersion < NOBLKS_VERSION_START || pnode->nVersion >= NOBLKS_VERSION_END)) {
+            // if ok, compare node's score with the best so far
+            int64_t nScore = NodeSyncScore(pnode);
+            if (pnodeNewSync == NULL || nScore > nBestScore) {
+                pnodeNewSync = pnode;
+                nBestScore = nScore;
+            }
+        }
+    }
+    // if a new sync candidate was found, start sync!
+    if (pnodeNewSync) {
+        pnodeNewSync->fStartSync = true;
+        pnodeSync = pnodeNewSync;
+    }
+}
 
 void ThreadMessageHandler(void* parg)
 {
@@ -1512,18 +1588,22 @@ void ThreadMessageHandler2(void* parg)
     SetThreadPriority(THREAD_PRIORITY_BELOW_NORMAL);
     while (!fShutdown)
     {
+        bool fHaveSyncNode = false;
         vector<CNode*> vNodesCopy;
         {
             LOCK(cs_vNodes);
             vNodesCopy = vNodes;
-            BOOST_FOREACH(CNode* pnode, vNodesCopy)
+            BOOST_FOREACH(CNode* pnode, vNodesCopy) {
                 pnode->AddRef();
+                if (pnode == pnodeSync)
+                    fHaveSyncNode = true;
+            }
         }
 
+        if (!fHaveSyncNode)
+            StartSync(vNodesCopy);
+
         // Poll the connected nodes for messages
-        CNode* pnodeTrickle = NULL;
-        if (!vNodesCopy.empty())
-            pnodeTrickle = vNodesCopy[GetRand(vNodesCopy.size())];
         BOOST_FOREACH(CNode* pnode, vNodesCopy)
         {
             if (pnode->fDisconnect)
@@ -1534,7 +1614,11 @@ void ThreadMessageHandler2(void* parg)
                 TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
                 if (lockRecv)
                     if (!ProcessMessages(pnode))
+                    {
                         pnode->CloseSocketDisconnect();
+                        if (pnode == pnodeSync)
+                            fHaveSyncNode = false;
+                    }
             }
             if (fShutdown)
                 return;
@@ -1543,7 +1627,7 @@ void ThreadMessageHandler2(void* parg)
             {
                 TRY_LOCK(pnode->cs_vSend, lockSend);
                 if (lockSend)
-                    SendMessages(pnode, pnode == pnodeTrickle);
+                    SendMessages(pnode);
             }
             if (fShutdown)
                 return;
@@ -1881,4 +1965,34 @@ void RelayTransaction(const CTransaction& tx, const uint256& hash, const CDataSt
     }
 
     RelayInventory(inv);
+}
+
+
+
+void CNode::RecordBytesRecv(uint64_t bytes)
+{
+    LOCK(cs_totalBytesRecv);
+    nTotalBytesRecv += bytes;
+}
+
+void CNode::RecordBytesSent(uint64_t bytes)
+{
+    LOCK(cs_totalBytesSent);
+    nTotalBytesSent += bytes;
+}
+
+uint64_t CNode::GetTotalBytesRecv()
+{
+    LOCK(cs_totalBytesRecv);
+    return nTotalBytesRecv;
+}
+
+uint64_t CNode::GetTotalBytesSent()
+{
+    LOCK(cs_totalBytesSent);
+    return nTotalBytesSent;
+}
+
+int64_t PoissonNextSend(int64_t nNow, int average_interval_seconds) {
+    return nNow + (int64_t)(log1p(GetRand(1ULL << 48) * -0.0000000000000035527136788 /* -1/2^48 */) * average_interval_seconds * -1000000.0 + 0.5);
 }

@@ -18,6 +18,8 @@
 #include <QFileDialog>
 #include <QDesktopServices>
 #include <QThread>
+#include <QTextEdit>
+#include <QTextTable>
 
 #if (defined (LINUX) || defined (_linux_))
 #include <sys/types.h>
@@ -471,9 +473,9 @@ bool SetStartOnSystemStartup(bool fAutoStart) { return false; }
 HelpMessageBox::HelpMessageBox(QWidget *parent) :
     QMessageBox(parent)
 {
-    header = tr("ChessCoin-Qt") + " " + tr("version") + " " +
-        QString::fromStdString(FormatFullVersion()) + "\n\n" +
-        tr("Usage:") + "\n" +
+    QString version = tr("Chesscoin-qt") + " " + tr("version") + " " +
+            QString::fromStdString(FormatFullVersion()) + "\n\n";
+    header = version + tr("Usage:") + "\n" +
         "  chesscoin-qt [" + tr("command-line options") + "]                     " + "\n";
 
     coreOptions = QString::fromStdString(HelpMessage());
@@ -487,7 +489,66 @@ HelpMessageBox::HelpMessageBox(QWidget *parent) :
     setTextFormat(Qt::PlainText);
     // setMinimumWidth is ignored for QMessageBox so put in non-breaking spaces to make it wider.
     setText(header + QString(QChar(0x2003)).repeated(50));
-    setDetailedText(coreOptions + "\n" + uiOptions);
+    setDetailedText("\n");
+    coreOptions = coreOptions + "\n" + uiOptions;
+
+    auto te = findChild<QTextEdit*>();
+    if (te == NULL)
+    {
+        setDetailedText(coreOptions);
+    }
+    else
+    {
+        QTextCharFormat bold;
+        bold.setFontWeight(QFont::Bold);
+
+        te->setFixedWidth(550);
+        te->setFixedHeight(350);
+
+        QTextCursor cursor(te->document());
+
+        QTextTableFormat tf;
+        tf.setBorderStyle(QTextFrameFormat::BorderStyle_None);
+        tf.setCellPadding(2);
+        QVector<QTextLength> widths;
+        widths << QTextLength(QTextLength::PercentageLength, 45);
+        widths << QTextLength(QTextLength::PercentageLength, 55);
+        tf.setColumnWidthConstraints(widths);
+
+        for (const QString &line : coreOptions.split("\n")) {
+            if (line.startsWith("  -"))
+            {
+                QString s1, s2;
+                int found = line.indexOf("-rpcssl");
+                if (found != -1)
+                {
+                    s1 = line.left(42).trimmed();
+                    s2 = line.mid(43).trimmed();
+                }
+                else
+                {
+                    s1 = line.left(24).trimmed();
+                    s2 = line.mid(25).trimmed();
+                }
+
+                cursor.currentTable()->appendRows(1);
+                cursor.movePosition(QTextCursor::PreviousCell);
+                cursor.movePosition(QTextCursor::NextRow);
+                cursor.insertText(s1);
+                cursor.movePosition(QTextCursor::NextCell);
+                cursor.insertText(s2+' ');
+            } else if (line.size() > 0) {
+                //Title of a group
+                if (cursor.currentTable())
+                    cursor.currentTable()->appendRows(1);
+                cursor.movePosition(QTextCursor::Down);
+                cursor.insertText(line.trimmed(), bold);
+                cursor.insertTable(1, 2, tf);
+            }
+        }
+
+        te->moveCursor(QTextCursor::Start);
+    }
 }
 
 void HelpMessageBox::printToConsole()
@@ -506,6 +567,26 @@ void HelpMessageBox::showOrPrint()
         // On other operating systems, print help text to console
         printToConsole();
 #endif
+}
+
+QString formatDurationStr(int secs)
+{
+    QStringList strList;
+    int days = secs / 86400;
+    int hours = (secs % 86400) / 3600;
+    int mins = (secs % 3600) / 60;
+    int seconds = secs % 60;
+
+    if (days)
+        strList.append(QString(QObject::tr("%1 d")).arg(days));
+    if (hours)
+        strList.append(QString(QObject::tr("%1 h")).arg(hours));
+    if (mins)
+        strList.append(QString(QObject::tr("%1 m")).arg(mins));
+    if (seconds || (!days && !hours && !mins))
+        strList.append(QString(QObject::tr("%1 s")).arg(seconds));
+
+    return strList.join(" ");
 }
 
 } // namespace GUIUtil

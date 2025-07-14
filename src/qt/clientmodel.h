@@ -13,6 +13,14 @@ class QDateTime;
 class QTimer;
 QT_END_NAMESPACE
 
+enum NumConnections {
+    CONNECTIONS_NONE = 0,
+    CONNECTIONS_IN = (1U << 0),
+    CONNECTIONS_OUT = (1U << 1),
+    CONNECTIONS_ALL = (CONNECTIONS_IN | CONNECTIONS_OUT),
+};
+
+
 /** Model for Bitcoin network client. */
 class ClientModel : public QObject
 {
@@ -23,9 +31,12 @@ public:
 
     OptionsModel *getOptionsModel();
 
-    int getNumConnections() const;
+    int getNumConnections(uint8_t flags = CONNECTIONS_ALL) const;
     int getNumBlocks() const;
     int getNumBlocksAtStartup();
+
+    quint64 getTotalBytesRecv() const;
+    quint64 getTotalBytesSent() const;
 
     QDateTime getLastBlockDate() const;
 
@@ -41,6 +52,7 @@ public:
     QString formatFullVersion() const;
     QString formatBuildDate() const;
     QString clientName() const;
+    QString clientAgent() const;
     QString formatClientStartupTime() const;
 
 private:
@@ -51,21 +63,29 @@ private:
 
     int numBlocksAtStartup;
 
+#ifdef TIMERMODE
     QTimer *pollTimer;
+#else
+    QThread* const pollThread;
+#endif
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
 signals:
     void numConnectionsChanged(int count);
     void numBlocksChanged(int count, int countOfPeers);
+    void bytesChanged(quint64 totalBytesIn, quint64 totalBytesOut);
 
     //! Asynchronous error notification
     void error(const QString &title, const QString &message, bool modal);
 
 public slots:
+#ifdef TIMERMODE
     void updateTimer();
+#endif
     void updateNumConnections(int numConnections);
     void updateAlert(const QString &hash, int status);
+    void updateBlocksNumber(int bestHeight, int totalBlock);
 };
 
 #endif // CLIENTMODEL_H

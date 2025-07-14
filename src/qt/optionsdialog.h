@@ -42,6 +42,9 @@ private slots:
 
     void showRestartWarning_Proxy();
     void showRestartWarning_Lang();
+#ifdef USE_DBCACHE
+    void showRestartWarning_DbCahe(int i);
+#endif
     void updateDisplayUnit();
     void handleProxyIpValid(QValidatedLineEdit *object, bool fState);
 
@@ -54,6 +57,7 @@ private:
     MonitoredDataMapper *mapper;
     bool fRestartWarningDisplayed_Proxy;
     bool fRestartWarningDisplayed_Lang;
+    bool fRestartWarningDisplayed_DbCache;
     bool fProxyIpValid;
 };
 

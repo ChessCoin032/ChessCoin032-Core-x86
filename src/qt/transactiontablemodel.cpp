@@ -71,6 +71,7 @@ public:
         cachedWallet.clear();
         {
             LOCK2(cs_main, wallet->cs_wallet);
+
             for(std::map<uint256, CWalletTx>::iterator it = wallet->mapWallet.begin(); it != wallet->mapWallet.end(); ++it)
             {
                 if(TransactionRecord::showTransaction(it->second))
@@ -186,13 +187,11 @@ public:
             //
             // If a status update is needed (blocks came in since last check),
             //  update the status of this transaction from the wallet. Otherwise,
-            // simply re-use the cached status.
-            TRY_LOCK(cs_main, lockMain);
-            if(lockMain)
+            // simply re-use the cached status.           
+            if(rec->statusUpdateNeeded())
             {
-                TRY_LOCK(wallet->cs_wallet, lockWallet);
-                if(lockWallet && rec->statusUpdateNeeded())
                 {
+                    LOCK(wallet->cs_wallet);
                     std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(rec->hash);
 
                     if(mi != wallet->mapWallet.end())

@@ -6,7 +6,6 @@ DEFINES += QT_GUI BOOST_THREAD_USE_LIB BOOST_SPIRIT_THREADSAFE
 CONFIG += no_include_pwd
 CONFIG += thread
 CONFIG += static
-CONFIG -= embed_manifest_exe
 
 QT += core gui network multimedia multimediawidgets
 
@@ -16,7 +15,7 @@ greaterThan(QT_MAJOR_VERSION, 4) {
     DEFINES += QT_DEPRECATED_WARNINGS
 }
 
-DEFINES += LOCKMODE
+DEFINES += RASPBERRY LOCKMODE
 
 # for boost 1.37, add -mt to the boost libraries
 # use: qmake BOOST_LIB_SUFFIX=-mt
@@ -32,22 +31,23 @@ OBJECTS_DIR = build
 MOC_DIR = build
 UI_DIR = build
 
-BOOST_LIB_SUFFIX=-mgw5-mt-s-x32-1_77
-BOOST_INCLUDE_PATH=D:/ChessCoinLibs/boost_1_77_0
-BOOST_LIB_PATH=D:/ChessCoinLibs/boost_1_77_0/stage/lib
+BOOST_LIB_SUFFIX=
+BOOST_INCLUDE_PATH=/usr/local/boost.1.77.0/include
+BOOST_LIB_PATH=/usr/local/boost.1.77.0/lib
 
-BDB_INCLUDE_PATH=D:/ChessCoinLibs/db-6.0.20/build_windows
-BDB_LIB_PATH=D:/ChessCoinLibs/db-6.0.20/build_windows
+BDB_INCLUDE_PATH=/usr/local/berkeleydb.6.0.20/include
+BDB_LIB_PATH=/usr/local/berkeleydb.6.0.20/lib
 
-OPENSSL_INCLUDE_PATH=D:/ChessCoinLibs/openssl-1.1.1l/include
-OPENSSL_LIB_PATH=D:/ChessCoinLibs/openssl-1.1.1l
+OPENSSL_INCLUDE_PATH=/usr/local/ssl.1.1.1/include
+OPENSSL_LIB_PATH=/usr/local/ssl.1.1.1/lib
 
-QRENCODE_INCLUDE_PATH=D:/ChessCoinLibs/qrencode-4.1.1
-QRENCODE_LIB_PATH=D:/ChessCoinLibs/qrencode-4.1.1/.libs
+QRENCODE_INCLUDE_PATH=/usr/local/qrencode-4.1.1/include
+QRENCODE_LIB_PATH=/usr/local/qrencode-4.1.1/lib
 
-QRDECODE_INCLUDE_PATH=D:/ChessCoinLibs/qzxing
-QRDECODE_LIB_PATH=D:/ChessCoinLibs/qzxing/lib
+QRDECODE_INCLUDE_PATH=/usr/local/qzxing
+QRDECODE_LIB_PATH=/usr/local/qzxing/lib
 
+SSP_LIB_PATH=/home/pi/rpi-qt/tools/native-pi-gcc-10.3.0-2/lib/
 
 # use: qmake "RELEASE=1"
 contains(RELEASE, 1) {
@@ -69,6 +69,7 @@ contains(DEBUG, 1) {
     QMAKE_CXXCFLAGS += -g -O0
 }
 
+
 !win32 {
 # for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
 QMAKE_CXXFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
@@ -77,18 +78,17 @@ QMAKE_LFLAGS *= -fstack-protector-all --param ssp-buffer-size=1
 # This can be enabled for Windows, when we switch to MinGW >= 4.4.x.
 }
 # for extra security on Windows: enable ASLR and DEP via GCC linker flags
-
 win32:QMAKE_LFLAGS *= -Wl,--dynamicbase -Wl,--nxcompat
 
 # for debugging at release mode
 #QMAKE_CXXFLAGS +=-g
-QMAKE_LFLAGS_RELEASE -= -Wl,-s
+win32:QMAKE_LFLAGS_RELEASE -= -Wl,-s
 #QMAKE_CXXFLAGS_RELEASE += $$QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO
 #QMAKE_LFLAGS_RELEASE += $$QMAKE_LFLAGS_RELEASE_WITH_DEBUGINFO
 
 ## Windows Debug help Bug
 #win32:QMAKE_LFLAGS += -static-libgcc -static-libstdc++
-## Windows Debug help Bug
+
 
 # use: qmake "USE_QRCODE=1"
 # libqrencode (http://fukuchi.org/works/qrencode/index.en.html) must be installed for support
@@ -111,16 +111,12 @@ contains(BITCOIN_NEED_QT_PLUGINS, 1) {
     QTPLUGIN += qcncodecs qjpcodecs qtwcodecs qkrcodecs qtaccessiblewidgets
 }
 
-contains(USE_RASPBERRY, 1) {
-    message(Building with Raspberry support)
-    DEFINES += RASPBERRY
-    QTPLUGIN += qeglfs qlinuxfb qminimal qminimalegl qoffscreen qvnc qwebgl qxcb
-}
+#QTPLUGIN += qeglfs qlinuxfb qminimal qminimalegl qoffscreen qvnc qwebgl
 
 contains(USE_UPNP, 1) {
     message(Building with miniupnpc support)
-    INCLUDEPATHS += -I"D:/ChessCoinLibs/miniupnpc-2.2.3"
-    MINIUPNPC_LIB_PATH=D:/ChessCoinLibs/miniupnpc-2.2.3
+    INCLUDEPATHS += -I"/usr/local/include/miniupnpc"
+    MINIUPNPC_LIB_PATH=/usr/local/lib/arm-linux-gnueabihf
     LIBS += $$join(MINIUPNPC_LIB_PATH,,-L,) -lminiupnpc
     win32:LIBS += -liphlpapi
     DEFS += -DSTATICLIB -DUSE_UPNP=$(USE_UPNP)
@@ -146,6 +142,7 @@ contains(USE_IPV6, -) {
 
 INCLUDEPATH += src/leveldb/include src/leveldb/helpers
 LIBS += $$PWD/src/leveldb/libleveldb.a $$PWD/src/leveldb/libmemenv.a
+#LIBS += $$PWD/src/leveldb-rpi/libleveldb.a -lsnappy
 SOURCES += src/txdb-leveldb.cpp
 
 !win32 {
@@ -193,7 +190,7 @@ contains(USE_O3, 1) {
     QMAKE_CFLAGS += -msse2
 }
 
-QMAKE_CXXFLAGS_WARN_ON = -fdiagnostics-show-option -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter -Wstack-protector -fexceptions
+QMAKE_CXXFLAGS_WARN_ON = -fdiagnostics-show-option -Wall -Wextra -Wno-ignored-qualifiers -Wformat -Wformat-security -Wno-unused-parameter -Wstack-protector
 
 # Input
 DEPENDPATH += src src/json src/qt
@@ -289,8 +286,6 @@ HEADERS += src/qt/bitcoingui.h \
     src/netbase.h \
     src/clientversion.h \
     src/threadsafety.h \
-    src/checkqueue.h \
-    src/timestamps.h \
     src/qt/qtcamera.h \
     src/qt/trafficgraphwidget.h
 
@@ -421,7 +416,6 @@ TSQM.output = $$QM_DIR/${QMAKE_FILE_BASE}.qm
 TSQM.commands = $$QMAKE_LRELEASE ${QMAKE_FILE_IN} -qm ${QMAKE_FILE_OUT}
 TSQM.CONFIG = no_link
 QMAKE_EXTRA_COMPILERS += TSQM
-PRE_TARGETDEPS += compiler_TSQM_make_all
 
 # "Other files" to show in Qt Creator
 OTHER_FILES += \
@@ -448,12 +442,11 @@ INCLUDEPATH += $$BOOST_INCLUDE_PATH $$BDB_INCLUDE_PATH $$OPENSSL_INCLUDE_PATH $$
 DEPENDPATH += $$BOOST_LIB_PATH
 
 LIBS += $$join(BOOST_LIB_PATH,,-L,) $$join(BDB_LIB_PATH,,-L,) $$join(OPENSSL_LIB_PATH,,-L,) $$join(QRENCODE_LIB_PATH,,-L,) $$join(QRDECODE_LIB_PATH,,-L,)
-LIBS += -lssl -lcrypto -ldb_cxx
+LIBS += -lssl -lcrypto -ldb_cxx -lz
 # -lgdi32 has to happen after -lcrypto (see  #681)
 windows:LIBS += -lws2_32 -lshlwapi -lmswsock -lole32 -loleaut32 -luuid -lgdi32
-LIBS += -lboost_system$$BOOST_LIB_SUFFIX -lboost_filesystem$$BOOST_LIB_SUFFIX  -lboost_program_options$$BOOST_LIB_SUFFIX -lboost_thread$$BOOST_LIB_SUFFIX libboost_chrono$$BOOST_LIB_SUFFIX 
-windows:LIBS += -Wl,-Bstatic -lpthread -Wl,-Bdynamic
-LIBS += -lQZXing -liconv
+LIBS += -lboost_system -lboost_filesystem -lboost_program_options -lboost_thread -lboost_chrono
+LIBS += -lQZXing
 
 contains(RELEASE, 1) {
     !windows:!macx {
@@ -466,5 +459,8 @@ contains(RELEASE, 1) {
     DEFINES += LINUX
     LIBS += -lrt -ldl
 }
+
+target.path = /home/pi
+INSTALLS += target
 
 system($$QMAKE_LRELEASE -silent $$_PRO_FILE_)

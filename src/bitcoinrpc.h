@@ -112,6 +112,7 @@ public:
     CRPCTable();
     const CRPCCommand* operator[](std::string name) const;
     std::string help(std::string name) const;
+    std::vector<std::string> listCommands() const;
 
     /**
      * Execute a method.

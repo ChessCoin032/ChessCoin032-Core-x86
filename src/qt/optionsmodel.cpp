@@ -37,7 +37,6 @@ bool static ApplyProxySettings()
 void OptionsModel::Init()
 {
     QSettings settings;
-
     // These are Qt-only settings:
     nDisplayUnit = settings.value("nDisplayUnit", BitcoinUnits::BTC).toInt();
     bDisplayAddresses = settings.value("bDisplayAddresses", false).toBool();
@@ -47,6 +46,7 @@ void OptionsModel::Init()
     nTransactionFee = settings.value("nTransactionFee").toLongLong();
     nReserveBalance = settings.value("nReserveBalance").toLongLong();
     language = settings.value("language", "").toString();
+    nDbCacheSize = settings.value("dbcacheui", 25).toInt();
 
     // These are shared with core Bitcoin; we want
     // command-line options to override the GUI settings:
@@ -56,6 +56,9 @@ void OptionsModel::Init()
         SoftSetArg("-socks", settings.value("nSocksVersion").toString().toStdString());
     if (!language.isEmpty())
         SoftSetArg("-lang", language.toStdString());
+
+    string cachesize = std::to_string(nDbCacheSize);
+    mapArgs["-dbcache"] = cachesize;
 }
 
 int OptionsModel::rowCount(const QModelIndex & parent) const
@@ -106,6 +109,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("language", "");
         case CoinControlFeatures:
             return QVariant(fCoinControlFeatures);
+        case DbCacheSize:
+            return QVariant(nDbCacheSize);
         default:
             return QVariant();
         }
@@ -195,6 +200,13 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             emit coinControlFeaturesChanged(fCoinControlFeatures);
             }
             break;
+        case DbCacheSize: {
+            nDbCacheSize = value.toInt();
+            settings.setValue("dbcacheui", nDbCacheSize);
+            string cachesize = std::to_string(nDbCacheSize);
+            mapArgs["-dbcache"] = cachesize;
+            }
+            break;
         default:
             break;
         }
@@ -238,3 +250,4 @@ bool OptionsModel::getDisplayAddresses()
 {
     return bDisplayAddresses;
 }
+

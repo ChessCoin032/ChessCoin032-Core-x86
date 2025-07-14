@@ -14,6 +14,7 @@
 
 #include <QDateTime>
 #include <QTimer>
+#include <QThread>
 
 #include <boost/bind/placeholders.hpp>
 using namespace boost::placeholders;
@@ -22,14 +23,47 @@ static const int64_t nClientStartupTime = GetTime();
 
 ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
     QObject(parent), optionsModel(optionsModel),
-    cachedNumBlocks(0), cachedNumBlocksOfPeers(0), pollTimer(0)
+    cachedNumBlocks(0),
+    cachedNumBlocksOfPeers(0),
+#ifdef TIMERMODE
+    pollTimer(0)
+#else
+    pollThread(new QThread(this))
+#endif
 {
     numBlocksAtStartup = -1;
 
+#ifdef TIMERMODE
     pollTimer = new QTimer(this);
     pollTimer->setInterval(MODEL_UPDATE_DELAY);
     pollTimer->start();
     connect(pollTimer, SIGNAL(timeout()), this, SLOT(updateTimer()));
+#else
+    QTimer* timer = new QTimer;
+    timer->setInterval(MODEL_UPDATE_DELAY);
+
+    connect(timer, &QTimer::timeout, [this] {
+        // no locking required at this point
+        // the following calls will acquire the required lock
+        int newNumBlocks = getNumBlocks();
+        int newNumBlocksOfPeers = getNumBlocksOfPeers();
+
+        if(cachedNumBlocks != newNumBlocks || cachedNumBlocksOfPeers != newNumBlocksOfPeers)
+        {
+            cachedNumBlocks = newNumBlocks;
+            cachedNumBlocksOfPeers = newNumBlocksOfPeers;
+
+            emit numBlocksChanged(newNumBlocks, newNumBlocksOfPeers);
+        }
+
+        emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
+    });
+    connect(pollThread, &QThread::finished, timer, &QObject::deleteLater);
+    connect(pollThread, &QThread::started, [timer] { timer->start(); });
+    // move timer to thread so that polling doesn't disturb main event loop
+    timer->moveToThread(pollThread);
+    pollThread->start();
+#endif
 
     subscribeToCoreSignals();
 }
@@ -37,16 +71,30 @@ ClientModel::ClientModel(OptionsModel *optionsModel, QObject *parent) :
 ClientModel::~ClientModel()
 {
     unsubscribeFromCoreSignals();
+
+#ifndef TIMERMODE
+    pollThread->quit();
+    pollThread->wait();
+#endif
 }
 
-int ClientModel::getNumConnections() const
+int ClientModel::getNumConnections(uint8_t flags) const
 {
-    return vNodes.size();
+    //return vNodes.size();
+    LOCK(cs_vNodes);
+    if (flags == CONNECTIONS_ALL) // Shortcut if we want total
+        return (int)(vNodes.size());
+
+    int nNum = 0;
+    for (CNode* pnode : vNodes)
+    if (flags & (pnode->fInbound ? CONNECTIONS_IN : CONNECTIONS_OUT))
+        nNum++;
+
+    return nNum;
 }
 
 int ClientModel::getNumBlocks() const
 {
-    LOCK(cs_main);
     return nBestHeight;
 }
 
@@ -56,15 +104,25 @@ int ClientModel::getNumBlocksAtStartup()
     return numBlocksAtStartup;
 }
 
+quint64 ClientModel::getTotalBytesRecv() const
+{
+    return CNode::GetTotalBytesRecv();
+}
+
+quint64 ClientModel::getTotalBytesSent() const
+{
+    return CNode::GetTotalBytesSent();
+}
+
 QDateTime ClientModel::getLastBlockDate() const
 {
-    LOCK(cs_main);
     if (pindexBest)
         return QDateTime::fromTime_t(pindexBest->GetBlockTime());
     else
         return QDateTime::fromTime_t(1465133106); // Genesis block's time
 }
 
+#ifdef TIMERMODE
 void ClientModel::updateTimer()
 {
     // Get required lock upfront. This avoids the GUI from getting stuck on
@@ -86,11 +144,19 @@ void ClientModel::updateTimer()
 
         emit numBlocksChanged(newNumBlocks, newNumBlocksOfPeers);
     }
+
+    emit bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
 }
+#endif
 
 void ClientModel::updateNumConnections(int numConnections)
 {
     emit numConnectionsChanged(numConnections);
+}
+
+void ClientModel::updateBlocksNumber(int bestHeight, int totalBlock)
+{
+    emit numBlocksChanged(bestHeight, totalBlock);
 }
 
 void ClientModel::updateAlert(const QString &hash, int status)
@@ -139,7 +205,7 @@ OptionsModel *ClientModel::getOptionsModel()
 
 QString ClientModel::formatFullVersion() const
 {
-    string version = CLIENT_NAME +  " " + FormatFullVersion();
+    string version = "Chesscoin " + FormatFullVersion();
 
     return QString::fromStdString(version);
 }
@@ -153,6 +219,13 @@ QString ClientModel::clientName() const
 {
     return QString::fromStdString(CLIENT_NAME);
 }
+
+
+QString ClientModel::clientAgent() const
+{
+    return QString::fromStdString(CLIENT_AGENT);
+}
+
 
 QString ClientModel::formatClientStartupTime() const
 {

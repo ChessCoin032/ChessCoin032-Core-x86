@@ -320,12 +320,10 @@ Value getblockchaininfo(const Array& params, bool fHelp)
             "  \"difficulty\": xxxxxx,     (numeric) the current difficulty\n"
             "}\n");
 
-    LOCK(cs_main);
-
-    Object obj;
-    obj.push_back(Pair("blocks",               nBestHeight));
-    obj.push_back(Pair("headers",              pindexBest ? pindexBest->nHeight : -1));
-    obj.push_back(Pair("bestblockhash",        hashBestChain.GetHex()));
-    obj.push_back(Pair("difficulty",           (double)GetDifficulty()));
-    return obj;
+    Object result;
+    result.push_back(Pair("blocks",               nBestHeight));
+    result.push_back(Pair("headers",              pindexBest ? pindexBest->nHeight : -1));
+    result.push_back(Pair("bestblockhash",        hashBestChain.GetHex()));
+    result.push_back(Pair("difficulty",           (double)GetDifficulty()));
+    return result;
 }

@@ -128,9 +128,9 @@ QStatusBar::item {
 }
 
 QStatusBar QToolTip {
-  background-color: #1A72BB;
+  background-color: #346792;
   border: 1px solid #19232D;
-  color: #19232D;
+  color: #E0E1E3;
   /* Remove padding, for fix combo box tooltip */
   padding: 0px;
   /* Reducing transparency to read better */

@@ -5,6 +5,7 @@
 #include "monitoreddatamapper.h"
 #include "netbase.h"
 #include "optionsmodel.h"
+#include "util.h"
 
 #include <QDir>
 #include <QIntValidator>
@@ -12,6 +13,18 @@
 #include <QMessageBox>
 #include <QRegExp>
 #include <QRegExpValidator>
+#include <QProcess>
+
+#if (defined (LINUX) || defined (__linux__))
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/sysinfo.h>
+#endif
+
+#ifdef Q_OS_MAC
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
 
 OptionsDialog::OptionsDialog(QWidget *parent) :
     QDialog(parent),
@@ -20,6 +33,7 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     mapper(0),
     fRestartWarningDisplayed_Proxy(false),
     fRestartWarningDisplayed_Lang(false),
+    fRestartWarningDisplayed_DbCache(false),
     fProxyIpValid(true)
 {
     ui->setupUi(this);
@@ -79,6 +93,13 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
 
     ui->unit->setModel(new BitcoinUnits(this));
 
+
+#if (defined (LINUX) || defined (__linux__))
+    ui->socksVersion->setMinimumWidth(55);
+#elif defined Q_OS_MAC
+    ui->socksVersion->setMinimumWidth(55);
+#endif
+
     /* Widget-to-option mapper */
     mapper = new MonitoredDataMapper(this);
     mapper->setSubmitPolicy(QDataWidgetMapper::ManualSubmit);
@@ -90,6 +111,11 @@ OptionsDialog::OptionsDialog(QWidget *parent) :
     connect(mapper, SIGNAL(currentIndexChanged(int)), this, SLOT(disableApplyButton()));
     /* setup/change UI elements when proxy IP is invalid/valid */
     connect(this, SIGNAL(proxyIpValid(QValidatedLineEdit *, bool)), this, SLOT(handleProxyIpValid(QValidatedLineEdit *, bool)));
+
+    ui->labelCache->hide();
+    ui->lblCacheUnit->hide();
+    ui->cacheBox->hide();
+    ui->cacheBox->setEnabled(false);
 }
 
 OptionsDialog::~OptionsDialog()
@@ -115,6 +141,9 @@ void OptionsDialog::setModel(OptionsModel *model)
 
     /* warn only when language selection changes by user action (placed here so init via mapper doesn't trigger this) */
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning_Lang()));
+#ifdef USE_DBCACHE
+    connect(ui->cacheBox, SIGNAL(valueChanged(int)), this, SLOT(showRestartWarning_DbCahe(int)));
+#endif
 
     /* disable apply button after settings are loaded as there is nothing to save */
     disableApplyButton();
@@ -126,6 +155,9 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->bitcoinAtStartup, OptionsModel::StartAtStartup);
     mapper->addMapping(ui->transactionFee, OptionsModel::Fee);
     mapper->addMapping(ui->reserveBalance, OptionsModel::ReserveBalance);
+#ifdef USE_DBCACHE
+    mapper->addMapping(ui->cacheBox, OptionsModel::DbCacheSize);
+#endif
 
     /* Network */
     mapper->addMapping(ui->connectSocks, OptionsModel::ProxyUse);
@@ -208,6 +240,17 @@ void OptionsDialog::showRestartWarning_Lang()
         fRestartWarningDisplayed_Lang = true;
     }
 }
+
+#ifdef USE_DBCACHE
+void OptionsDialog::showRestartWarning_DbCahe(int i)
+{
+    if(!fRestartWarningDisplayed_DbCache)
+    {
+        QMessageBox::warning(this, tr("Warning"), tr("This setting will take effect after restarting ChessCoin 0.32%."), QMessageBox::Ok);
+        fRestartWarningDisplayed_DbCache = true;
+    }
+}
+#endif
 
 void OptionsDialog::updateDisplayUnit()
 {

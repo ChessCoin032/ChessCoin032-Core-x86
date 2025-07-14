@@ -9,7 +9,20 @@
 #include "version.h"
 #include "ui_interface.h"
 #include <boost/algorithm/string/join.hpp>
+#include <boost/version.hpp>
 #include <algorithm>
+
+#if (defined (LINUX) || defined (__linux__))
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/sysinfo.h>
+#endif
+
+#ifdef Q_OS_MAC
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
+
 
 // Work around clang compilation problem in Boost 1.46:
 // /usr/include/boost/program_options/detail/config_file.hpp:163:17: error: call to function 'to_internal' that is neither visible in the template definition nor found by argument-dependent lookup
@@ -75,6 +88,8 @@ bool fNoListen = false;
 bool fLogTimestamps = false;
 CMedianFilter<int64_t> vTimeOffsets(200,0);
 bool fReopenDebugLog = false;
+bool fSyncForceDueStuck = false;
+
 
 // print to debug.log
 static FILE* logfileout = NULL;
@@ -193,12 +208,6 @@ uint256 GetRandHash()
     return hash;
 }
 
-
-
-
-
-
-
 inline int OutputDebugStringF(const char* pszFormat, ...)
 {
     int ret = 0;
@@ -230,41 +239,6 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
                 // Since the order of destruction of static/global objects is undefined,
                 // allocate mutexDebugLog on the heap the first time this routine
                 // is called to avoid crashes during shutdown.
-
-    #ifdef WIN32
-                {
-                    LOCK(cs_LogFile);
-                    // reopen the log file, if requested
-                    if (fReopenDebugLog) {
-                        fReopenDebugLog = false;
-                        boost::filesystem::path pathDebug = GetDataDir() / "debug.log";
-                        if (freopen(pathDebug.string().c_str(),"a",logfileout) != NULL)
-                            setbuf(logfileout, NULL); // unbuffered
-                    }
-
-                    // Debug print useful for profiling
-
-    #ifdef MYLOG
-                    fprintf(logfileout, "%s ", DateTimeStrFormat("%x %H:%M:%S", GetTime()).c_str());
-    #else
-                    if (fLogTimestamps && fStartedNewLine)
-                        fprintf(logfileout, "%s ", DateTimeStrFormat("%x %H:%M:%S", GetTime()).c_str());
-    #endif
-
-                    if (pszFormat[strlen(pszFormat) - 1] == '\n')
-                        fStartedNewLine = true;
-                    else
-                        fStartedNewLine = false;
-
-                    va_list arg_ptr;
-                    va_start(arg_ptr, pszFormat);
-    #ifdef MYLOG
-                    ret = vprintf(pszFormat, arg_ptr);
-    #endif
-                    ret = vfprintf(logfileout, pszFormat, arg_ptr);
-                    va_end(arg_ptr);
-                }
-    #else
                 static boost::mutex* mutexDebugLog = NULL;
                 if (mutexDebugLog == NULL) mutexDebugLog = new boost::mutex();
                 boost::mutex::scoped_lock scoped_lock(*mutexDebugLog);
@@ -287,10 +261,8 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
 
                 va_list arg_ptr;
                 va_start(arg_ptr, pszFormat);
-                //ret = vprintf(pszFormat, arg_ptr);
                 ret = vfprintf(logfileout, pszFormat, arg_ptr);
                 va_end(arg_ptr);
-    #endif
             }
         }
 
@@ -333,7 +305,6 @@ inline int OutputDebugStringF(const char* pszFormat, ...)
         ret = 0;
     }
 
-
     return ret;
 }
 
@@ -346,8 +317,13 @@ string vstrprintf(const char *format, va_list ap)
     int ret;
     while (true)
     {
+#ifndef _MSC_VER
         va_list arg_ptr;
         va_copy(arg_ptr, ap);
+#else
+        va_list arg_ptr = ap;
+#endif
+
 #ifdef WIN32
         ret = _vsnprintf(p, limit, format, arg_ptr);
 #else
@@ -563,24 +539,24 @@ void ParseParameters(int argc, const char* const argv[])
     mapMultiArgs.clear();
     for (int i = 1; i < argc; i++)
     {
-        char psz[10000];
-        strlcpy(psz, argv[i], sizeof(psz));
-        char* pszValue = (char*)"";
-        if (strchr(psz, '='))
+        std::string str(argv[i]);
+        std::string strValue;
+        size_t is_index = str.find('=');
+        if (is_index != std::string::npos)
         {
-            pszValue = strchr(psz, '=');
-            *pszValue++ = '\0';
+            strValue = str.substr(is_index+1);
+            str = str.substr(0, is_index);
         }
-        #ifdef WIN32
-        _strlwr(psz);
-        if (psz[0] == '/')
-            psz[0] = '-';
-        #endif
-        if (psz[0] != '-')
+#ifdef WIN32
+        std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+        if (str.compare(0,1, "/") == 0)
+            str = "-" + str.substr(1);
+#endif
+        if (str[0] != '-')
             break;
 
-        mapArgs[psz] = pszValue;
-        mapMultiArgs[psz].push_back(pszValue);
+        mapArgs[str] = strValue;
+        mapMultiArgs[str].push_back(strValue);
     }
 
     // New 0.6 features:
@@ -631,6 +607,7 @@ bool SoftSetArg(const std::string& strArg, const std::string& strValue)
 {
     if (mapArgs.count(strArg))
         return false;
+
     mapArgs[strArg] = strValue;
     return true;
 }
@@ -1047,8 +1024,9 @@ boost::filesystem::path GetDefaultDataDir()
     // Windows < Vista: C:\Documents and Settings\Username\Application Data\ChessCoin
     // Windows >= Vista: C:\Users\Username\AppData\Roaming\ChessCoin
     // Mac: ~/Library/Application Support/ChessCoin
-    // Unix: ~/.chesscoin
-#ifdef WIN32
+    // Linux: ~/chesscoin
+    // Raspberry: ~/.chesscoin
+#if defined (WIN32) || defined (WIN64)
     // Windows
     return GetSpecialFolderPath(CSIDL_APPDATA) / "ChessCoin";
 #else
@@ -1063,9 +1041,11 @@ boost::filesystem::path GetDefaultDataDir()
     pathRet /= "Library/Application Support";
     fs::create_directory(pathRet);
     return pathRet / "ChessCoin";
+#elif defined (RASPBERRY)
+    return pathRet / ".chesscoin";
 #else
     // Unix
-    return pathRet / "chesscoin"; //".chesscoin";
+    return pathRet / "chesscoin";
 #endif
 #endif
 }
@@ -1127,6 +1107,25 @@ void createConf()
 
     ofstream pConf;
     pConf.open(GetConfigFile().generic_string().c_str());
+
+#ifdef BUILD_DAEMON
+    pConf << "rpcuser=user\nrpcpassword="
+            + randomStrGen(15)
+            + "\nrpcport=7324"
+            + "\nport=7323"
+            + "\ndaemon=1 #(0=off, 1=on) Run in the background as a daemon and accept commands"
+            + "\nserver=1 #(0=off, 1=on) Accept command line and JSON-RPC commands"
+            + "\nrpcallowip=127.0.0.1"
+            + "\nlisten=1"
+            + "\naddnode=66.70.191.185:7323"
+            + "\naddnode=51.79.145.189:7323"
+            + "\naddnode=139.99.196.131:7323"
+            + "\naddnode=147.135.210.113:7323"
+            + "\naddnode=54.38.157.243:7323"
+            + "\naddnode=151.80.149.31:7323"
+            + "\naddnode=54.36.163.33:7323"
+            + "\naddnode=51.178.41.236:7323";
+#else
     pConf << "rpcuser=user\nrpcpassword="
             + randomStrGen(15)
             + "\nrpcport=7324"
@@ -1143,6 +1142,7 @@ void createConf()
             + "\naddnode=151.80.149.31:7323"
             + "\naddnode=54.36.163.33:7323"
             + "\naddnode=51.178.41.236:7323";
+#endif
     pConf.close();
 }
 
@@ -1179,7 +1179,7 @@ void CheckNewNodeServerList(map<string, vector<string> >& mapMultiSettingsRet)
     vNode.push_back("54.36.163.33:7323");
     vNode.push_back("51.178.41.236:7323");
 
-    map<string, vector<string>>::iterator it = mapMultiSettingsRet.begin();
+    map< string, vector<string> >::iterator it = mapMultiSettingsRet.begin();
     while (it != mapMultiSettingsRet.end())
     {
         // Accessing KEY from element pointed by it.
@@ -1224,11 +1224,6 @@ void ReadConfigFile(map<string, string>& mapSettingsRet, map<string, vector<stri
         }
         mapMultiSettingsRet[strKey].push_back(it->value[0]);
     }
-
-    // 2021/11/12 blocked network by 51.178.41.236.
-    // Connection confused by above ip, network was blocked.
-    // It's removed
-    //CheckNewNodeServerList(mapMultiSettingsRet);
 }
 
 boost::filesystem::path GetPidFile()
@@ -1287,7 +1282,7 @@ void ShrinkDebugFile()
         file = fopen(pathLog.string().c_str(), "w");
         if (file)
         {
-            fwrite(pch, 1, nBytes, file);
+            fwrite(pch, nBytes, 1, file);
             fclose(file);
         }
     }
@@ -1480,4 +1475,53 @@ bool NewThread(void(*pfn)(void*), void* parg)
         return false;
     }
     return true;
+}
+
+int GetComputerRAM()
+{
+    int RAMSize = 0;
+
+#if (defined (_WIN32) || defined (_WIN64))
+    MEMORYSTATUSEX memory_status;
+    ZeroMemory(&memory_status, sizeof(MEMORYSTATUSEX));
+    memory_status.dwLength = sizeof(MEMORYSTATUSEX);
+    if (GlobalMemoryStatusEx(&memory_status)) {
+        RAMSize = (long)(memory_status.ullTotalPhys / (1024 * 1024));
+    }
+#elif (defined (LINUX) || defined (__linux__))
+    struct sysinfo memInfo;
+    sysinfo (&memInfo);
+    long long totalPhysMem = memInfo.totalram;
+    totalPhysMem *= memInfo.mem_unit;
+    RAMSize = (long)(totalPhysMem / (1024 * 1024));
+#elif defined Q_OS_MAC
+    int mib[2];
+    int64_t physical_memory;
+    mib[0] = CTL_HW;
+    mib[1] = HW_MEMSIZE;
+    size_t length = sizeof(int64_t);
+    sysctl(mib, 2, &physical_memory, &length, NULL, 0);
+    RAMSize = (long)(physical_memory / (1024 * 1024));
+#endif
+
+    return RAMSize;
+}
+
+int GetDefaultCacheSize()
+{
+    int cache = GetArg("-dbcache", 25);
+    return cache;
+}
+
+char* GetBoostVersion()
+{
+    int major = BOOST_VERSION / 100000;
+    int minor = BOOST_VERSION / 100 % 1000;
+    int patch = BOOST_VERSION % 100;
+
+    static char ver[32];
+    memset(ver, 0, sizeof(ver));
+    sprintf(ver, "Boost %d.%d.%d", major, minor, patch);
+
+    return ver;
 }
